@@ -184,21 +184,33 @@ def get_offers():
 def buscar_ofertas(update, context):
     chat_id = update.effective_chat.id
 
+    import time
+
+def buscar_ofertas(update, context):
+    chat_id = update.effective_chat.id
+
     product_offers_links = get_offers()
-    if product_offers_links:
-        for product, offer, previous_price, discount_percentage, link in product_offers_links:
-            # Enviamos el nombre del producto, la oferta, el porcentaje de descuento, el precio anterior y el enlace al chat del usuario
-            message = f"Producto: {product}\nOferta actual: {offer}\nDescuento: {discount_percentage}\nPrecio anterior: {previous_price}\nEnlace: {link}"
-            context.bot.send_message(chat_id, message)
     
-    # Mostramos un mensaje al usuario indicando que la búsqueda ha finalizado
+    # Si encontramos productos
+    if product_offers_links:
+        
+        # Divide la lista de productos en grupos de 5
+        n = 5
+        chunks = [product_offers_links[i:i + n] for i in range(0, len(product_offers_links), n)]
+        
+        for chunk in chunks:
+            for product, offer, previous_price, discount_percentage, link in chunk:
+                # Enviamos el nombre del producto, la oferta, el porcentaje de descuento, el precio anterior y el enlace al chat del usuario
+                message = f"Producto: {product}\nOferta actual: {offer}\nDescuento: {discount_percentage}\nPrecio anterior: {previous_price}\nEnlace: {link}"
+                context.bot.send_message(chat_id, message)
+
+            # Espera 2 minutos antes de enviar el siguiente grupo
+            time.sleep(120)
+        
+        # Mostramos un mensaje al usuario indicando que la búsqueda ha finalizado
         context.bot.send_message(chat_id, "Búsqueda de ofertas completada.")
     else:
         context.bot.send_message(chat_id, "Lo siento, no se pudieron obtener las ofertas en este momento.")
-
-
-
-
 
 
 
