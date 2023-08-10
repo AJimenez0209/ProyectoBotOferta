@@ -23,7 +23,8 @@ def create_table():
         nombre TEXT PRIMARY KEY,
         oferta TEXT,
         precio_anterior TEXT,
-        enlace TEXT
+        enlace TEXT,
+        category TEXT
     )
     ''')
     
@@ -152,7 +153,10 @@ def get_offers():
 
 
             if product_name and offer and discount_badge:
-        
+    
+                div_element = element.find("div", class_="jsx-1833870204 jsx-3831830274 pod pod-4_GRID")
+                data_category = div_element["data-category"] if div_element and "data-category" in div_element.attrs else None
+
                 link_element = element.find("a", class_="jsx-2907167179 layout_grid-view layout_view_4_GRID")
                 link = link_element["href"] if link_element else None
 
@@ -163,22 +167,24 @@ def get_offers():
                 product_in_db = cursor.fetchone()
 
                 # Mostrar el porcentaje de descuento junto con los otros detalles
-                print(f"Producto detectado: {product_name_text}, Oferta: {current_offer}, Precio anterior: {previous_price}, Descuento: {discount_percentage}, Enlace: {link}")
+                print(f"Producto detectado: {product_name_text}, Oferta: {current_offer}, Precio anterior: {previous_price}, Descuento: {discount_percentage}, Categoría: {data_category}, Enlace: {link}")
+
 
                 # Definimos last_price antes de la condición if
                 last_price = clean_price(product_in_db[3]) if product_in_db and product_in_db[3] else None
 
                 if not product_in_db:
                     try:
-                        cursor.execute("INSERT INTO productos VALUES (?, ?, ?, ?, ?)", (product_name_text, current_offer, previous_price, discount_percentage, link))
+                        cursor.execute("INSERT INTO productos VALUES (?, ?, ?, ?, ?, ?)", (product_name_text, current_offer, previous_price, discount_percentage, data_category, link))
                         conn.commit()  # Asegúrate de hacer commit después de insertar.
                         print(f"Producto {product_name_text} agregado a la base de datos.")
-                        new_products.append((product_name_text, current_offer, previous_price, discount_percentage, link))
+                        new_products.append((product_name_text, current_offer, previous_price, discount_percentage, data_category, link))
                     except sqlite3.Error as e:
                         print(f"Error al agregar el producto {product_name_text} a la base de datos: {e}")
 
     conn.close()
     return new_products  # Devolvemos solo los nuevos productos
+
 
 
 def buscar_ofertas(update, context):
@@ -199,7 +205,7 @@ def buscar_ofertas(update, context):
         chunks = [product_offers_links[i:i + n] for i in range(0, len(product_offers_links), n)]
         
         for chunk in chunks:
-            for product, offer, previous_price, discount_percentage, link in chunk:
+            for product, offer, previous_price, discount_percentage, data_category, link in chunk:
                 # Enviamos el nombre del producto, la oferta, el porcentaje de descuento, el precio anterior y el enlace al chat del usuario
                 message = f"Producto: {product}\nOferta actual: {offer}\nDescuento: {discount_percentage}\nPrecio anterior: {previous_price}\nEnlace: {link}"
                 context.bot.send_message(chat_id, message)
