@@ -119,15 +119,32 @@ def get_offers():
 
         for element in all_elements:
             product_name = element.find("b", class_="jsx-1833870204 copy2 primary jsx-2889528833 normal pod-subTitle subTitle-rebrand")
-            offer = element.find(class_="copy10 primary medium jsx-2889528833 normal line-height-22")
-            discount_badge = element.find("div", class_="jsx-2575670149 discount-badge")
             # Definimos las clases que deseamos buscar
             classes_to_search = [
-            "copy3 septenary medium jsx-2889528833 normal crossed line-height-17"
+            "copy10 primary high jsx-2889528833 normal line-height-22",
+            "copy10 primary medium jsx-2889528833 normal line-height-22"
+            ]
+            # Buscamos el elemento que tenga alguna de las clases definidas
+            offer = None
+            for class_name in classes_to_search:
+                offer = element.find(class_=class_name)
+                if offer:  # Si encontramos un elemento que coincide, salimos del bucle
+                    break
+
+            discount_badge = element.find("div", class_="jsx-2575670149 discount-badge")
+            # Definimos las clases que deseamos buscar
+            # Definimos las clases que deseamos buscar
+            classes_to_search = [
+            "copy3 septenary medium jsx-2889528833 normal crossed line-height-17",
+            "copy3 primary medium jsx-2889528833 normal crossed line-height-17"
             ]
 
             # Buscamos el elemento que tenga alguna de las clases definidas
-            previous_price_element = element.find("span", class_=classes_to_search)
+            previous_price_element = None
+            for class_name in classes_to_search:
+                previous_price_element = element.find("span", class_=class_name)
+                if previous_price_element:  # Si encontramos un elemento que coincide, salimos del bucle
+                    break
             previous_price = clean_price(previous_price_element.text.strip()) if previous_price_element else None
 
             # Extraer el porcentaje de descuento
