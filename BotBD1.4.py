@@ -11,14 +11,19 @@ import logging
 import asyncio
 import aiohttp
 import aiosqlite
+import spacy
+
+#Carga del model en español de spacy para la categorización 
+nlp = spacy.load("es_core_news_sm")
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-
+#Versión de python
 print(telegram.__version__)
 
-
-token = '6302321641:AAHgQuqA62sGofOLwrHFvmP2FPm29B2jf6c'  # Mantén este valor secreto
+# Mantén este valor secreto
+token = '6302321641:AAHgQuqA62sGofOLwrHFvmP2FPm29B2jf6c'  
 
 async def fetch(url, session):
     async with session.get(url) as response:
@@ -111,45 +116,10 @@ def get_products_by_category(category):
         cursor.execute("SELECT * FROM productos WHERE categoria = ?", (category,))
         return cursor.fetchall()
 
+import spacy
 
-
-category_keywords = {
-    "MUEBLES": ["silla", "mesa", "Escritorio"],
-    "MUJER": ["vestido", "blusa", "falda"],
-    "HOMBRE": ["camisa", "pantalón", "zapato"],
-    "DORMITORIO": ["sofá", "cama"], 
-    "DECOHOGAR": ["cuadros", "pinturas"], 
-    "ESPECIALES": [], 
-    "NIÑOS Y JUGUETERÍA": ["juguetes", "juegos de mesa"], 
-    "DEPORTES Y AIRE LIBRE": ["pelota", "tenis", "paletas", "raquetas"], 
-    "MUNDO BEBÉ": ["Ropa bebe", "biberon", "chupete", "mamadera"], 
-    "TECNOLOGÍA": ["Apple", "celular", "Notebook", "PC" ], 
-    "BELLEZA, HIGIENE Y SALUD": ["Pinta labios","mascarilla"], 
-    "ORGANIZACIÓN": [], 
-    "FERRETERÍA Y CONSTRUCCIÓN": [], 
-    "JARDÍN Y TERRAZA": [], 
-    "COCINA Y BAÑO": [], 
-    "ELECTROHOGAR": [], 
-    "MASCOTAS": [], 
-    "LIBRERÍA Y CELEBRACIONES": [], 
-    "SERVICIOS E INTANGIBLES": [], 
-    "ASEO Y LIMPIEZA": [], 
-    "MALETERÍA Y VIAJES": [], 
-    "PASATIEMPOS": [], 
-    "AUTOMOTRIZ": [], 
-    "INSTRUMENTOS MUSICALES": [], 
-    "ALIMENTOS Y BEBIDAS": [], 
-    "OTROS NEGOCIOS": []
-    # ... añade todas las demás categorías y sus palabras clave aquí
-}
-
-def assign_category(product_name):
-    for category, keywords in category_keywords.items():
-        for keyword in keywords:
-            if keyword.lower() in product_name.lower():  # Comprueba si la palabra clave está en el nombre del producto
-                return category
-    return "OTROS NEGOCIOS"  # Si no se encuentra ninguna coincidencia, asigna la categoría "OTROS NEGOCIOS"
-
+# Carga el modelo en español de spaCy
+nlp = spacy.load("es_core_news_sm")
 
 async def get_elements(soup):
     # Buscar clases que comienzan con "jsx"
@@ -161,13 +131,14 @@ async def get_elements(soup):
 
     return jsx_elements + pod_link_elements + grid_view_elements
 
-    
-   
 
 def clean_price(price_str):
-
     logging.info(f"Original price_str: {price_str}")
-
+    
+    # Si encontramos un rango (detectado por el signo "-"), tomamos el primer precio
+    if '-' in price_str:
+        price_str = price_str.split('-')[0].strip()
+    
     # Limpiamos la cadena eliminando caracteres no deseados, excepto el punto y dígitos
     cleaned_price = re.sub(r"[^\d\.]", "", price_str.strip())
     
@@ -176,6 +147,7 @@ def clean_price(price_str):
     
     # Formateamos el número como una cadena con separadores de miles y el signo del peso al principio
     return f"${num_price:,.0f}".replace(",", ".")
+
 
 def find_element_by_classes(element, tag, classes_to_search):
     """Encuentra el primer elemento que coincide con una de las clases proporcionadas."""
@@ -191,7 +163,7 @@ async def get_offers():
     new_products = []  # Lista para guardar los nuevos productos encontrados
 
     async with aiohttp.ClientSession() as session:
-        for page in range(1, 5):
+        for page in range(1, 15):
             url = f"{url_base}?page={page}"
             
             try:
@@ -281,7 +253,60 @@ async def get_offers():
                 continue  # Esto hará que el bucle vuelva al inicio y reintente la misma página
 
     return new_products  # Devolvemos solo los nuevos productos
-                       
+
+categorizar_con_spacy = {
+    "MUEBLES": ["Juego Comedor","Juego de Comedor", "Mesa de Centro", "Mesa de Comedor", "Sofá"],
+    "MUJER": ["mujer", "jeans mujer","polera mujer", "zatos mujer"],
+    "HOMBRE": ["hombre", "camisa formal","polera hombre", "pantalón de vestir", "zapato deportivo", "zapatilla hombre"],
+    "DORMITORIO": ["Almohada Soft", "Almohada", "cama", "plumon", "sabanas", "Cama Europea"], 
+    "DECOHOGAR": ["Alfombra", "cuadros", "reloj pared"], 
+    "ESPECIALES": ["artículo de colección limitada"], 
+    "NIÑOS Y JUGUETERÍA": ["Peluches", "peluche"], 
+    "DEPORTES Y AIRE LIBRE": ["pelota", "raqueta", "paleta", "pelota", "ping pong", "tenis", "futbol"], 
+    "MUNDO BEBÉ": ["Bebesit", "coche", "ropa de bebé", "biberón", "chupete", "mamadera", "leche"], 
+    "TECNOLOGÍA": ["Smarwatch", "smartband", "parlante", "audifonos", "iPhone", "celular ", "Notebook", "PC de escritorio", "tablet", "pc", "teclado"], 
+    "BELLEZA, HIGIENE Y SALUD": ["Perfume", "pinta labios", "mascarilla", "mascara de pestaña", "maquillaje"], 
+    "ORGANIZACIÓN": ["estantería", "cajas organizadoras", "organizador"], 
+    "FERRETERÍA Y CONSTRUCCIÓN": ["taladro", "cerrucho" , "herramienta"], 
+    "JARDÍN Y TERRAZA": ["plantas", "terraza", "manguera", "planta", "hierbas"], 
+    "COCINA Y BAÑO": ["sartén", "taza de baño", "ollas", "Bowl"], 
+    "ELECTROHOGAR": ["Horno", "refrigerador", "Microondas ", "Aspiradora "], 
+    "MASCOTAS": ["alimento balanceado para gatos", "juguetes interactivos para perros"], 
+    "LIBRERÍA Y CELEBRACIONES": ["set de lápices de colores", "decoraciones para fiestas temáticas"], 
+    "SERVICIOS E INTANGIBLES": ["suscripción anual de software", "tarjeta de regalo"], 
+    "ASEO Y LIMPIEZA": ["limpiador multiuso desinfectante", "trapos de microfibra"], 
+    "MALETERÍA Y VIAJES": ["maleta resistente con ruedas", "mochila ergonómica para excursionismo"], 
+    "PASATIEMPOS": ["kit para tejer", "rompecabezas de 1000 piezas"], 
+    "AUTOMOTRIZ": ["aceite sintético para motores", "cubiertas para asientos"], 
+    "INSTRUMENTOS MUSICALES": ["guitarra", "teclado electrónico ", "flauta", "bateria"], 
+    "ALIMENTOS Y BEBIDAS": ["vinos de bodegas reconocidas", "quesos artesanales curados"], 
+    "OTROS NEGOCIOS": []
+}
+
+def assign_category(product_name_text):
+    # Paso 1: Enfoque basado en reglas
+    for category, keywords in categorizar_con_spacy.items():
+        for keyword in keywords:
+            if keyword.lower() in product_name_text.lower():
+                return category  # Si se encuentra una coincidencia, retorna la categoría
+
+    # Paso 2: Enfoque basado en similitud (si el enfoque basado en reglas no encuentra una coincidencia)
+    product_doc = nlp(product_name_text)
+    
+    best_similarity = 1
+    best_category = "OTROS NEGOCIOS"
+    
+    for category, descriptions in categorizar_con_spacy.items():
+        for description in descriptions:
+            description_doc = nlp(description)
+            similarity = product_doc.similarity(description_doc)
+            
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_category = category
+
+    return best_category
+
 def obtener_ofertas():
     """Esta función se encargará de obtener las ofertas."""
     product_offers_links = get_offers()
@@ -347,7 +372,6 @@ def category_callback(update, context):
     query = update.callback_query
     category_selected = query.data
     products = get_products_by_category(category_selected)
-    
 
     messages = []
     for product in products:
@@ -358,6 +382,11 @@ def category_callback(update, context):
     # Enviar todos los productos en un solo mensaje (puedes dividirlos si es necesario)
     send_offer_messages(context.bot, update.effective_chat.id, messages)
 
+    # Aquí es donde reenvías el teclado con categorías
+    categories = get_unique_categories()
+    keyboard = build_category_keyboard(categories)
+    context.bot.send_message(chat_id, "Selecciona otra categoría si quieres seguir viendo ofertas:", reply_markup=keyboard)
+    
     query.answer()
 
     
