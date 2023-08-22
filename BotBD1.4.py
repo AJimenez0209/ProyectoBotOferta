@@ -32,11 +32,48 @@ def create_table():
             nombre TEXT PRIMARY KEY,
             oferta TEXT,
             precio_anterior TEXT,
-            enlace TEXT,
-            category TEXT
+            enlace TEXT
+                  
         )
         ''')
         conn.commit()  # Confirmación explícita
+
+def add_data_category_column():
+    with sqlite3.connect('productos.db') as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("ALTER TABLE productos ADD COLUMN data_category TEXT")
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                pass  # La columna ya existe, no hacer nada.
+            else:
+                raise  # Otro error ocurrió, debes manejarlo o dejar que el programa falle.
+       
+
+def add_category_column():
+    with sqlite3.connect('productos.db') as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("ALTER TABLE productos ADD COLUMN categoria TEXT")
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                pass  # La columna ya existe, no hacer nada.
+            else:
+                raise  # Otro error ocurrió, debes manejarlo o dejar que el programa falle.
+
+def add_discount_percentage_column():
+    with sqlite3.connect('productos.db') as conn:
+        cursor = conn.cursor()
+        if not column_exists('productos', 'discount_percentage'):
+            try:
+                cursor.execute('''
+                ALTER TABLE productos ADD COLUMN discount_percentage TEXT
+                ''')
+            except sqlite3.Error as e:
+                print(f"Error al añadir la columna discount_percentage: {e}")
+
 
 
 def column_exists(table_name, column_name):
@@ -57,7 +94,7 @@ def get_unique_categories():
     with sqlite3.connect('productos.db') as conn:
         print("Conectado a la base de datos")  # <-- Añade esta línea para depuración
         cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT category FROM productos")
+        cursor.execute("SELECT DISTINCT categoria FROM productos")
         categories = [row[0] for row in cursor.fetchall()]
         #print("Categorias extraidas:", categories) depuracion
         return categories
@@ -71,19 +108,48 @@ def build_category_keyboard(categories):
 def get_products_by_category(category):
     with sqlite3.connect('productos.db') as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM productos WHERE category = ?", (category,))
+        cursor.execute("SELECT * FROM productos WHERE categoria = ?", (category,))
         return cursor.fetchall()
 
-def add_discount_percentage_column():
-    with sqlite3.connect('productos.db') as conn:
-        cursor = conn.cursor()
-        if not column_exists('productos', 'discount_percentage'):
-            try:
-                cursor.execute('''
-                ALTER TABLE productos ADD COLUMN discount_percentage TEXT
-                ''')
-            except sqlite3.Error as e:
-                print(f"Error al añadir la columna discount_percentage: {e}")
+
+
+category_keywords = {
+    "MUEBLES": ["silla", "mesa", "Escritorio"],
+    "MUJER": ["vestido", "blusa", "falda"],
+    "HOMBRE": ["camisa", "pantalón", "zapato"],
+    "DORMITORIO": ["sofá", "cama"], 
+    "DECOHOGAR": ["cuadros", "pinturas"], 
+    "ESPECIALES": [], 
+    "NIÑOS Y JUGUETERÍA": ["juguetes", "juegos de mesa"], 
+    "DEPORTES Y AIRE LIBRE": ["pelota", "tenis", "paletas", "raquetas"], 
+    "MUNDO BEBÉ": ["Ropa bebe", "biberon", "chupete", "mamadera"], 
+    "TECNOLOGÍA": ["Apple", "celular", "Notebook", "PC" ], 
+    "BELLEZA, HIGIENE Y SALUD": ["Pinta labios","mascarilla"], 
+    "ORGANIZACIÓN": [], 
+    "FERRETERÍA Y CONSTRUCCIÓN": [], 
+    "JARDÍN Y TERRAZA": [], 
+    "COCINA Y BAÑO": [], 
+    "ELECTROHOGAR": [], 
+    "MASCOTAS": [], 
+    "LIBRERÍA Y CELEBRACIONES": [], 
+    "SERVICIOS E INTANGIBLES": [], 
+    "ASEO Y LIMPIEZA": [], 
+    "MALETERÍA Y VIAJES": [], 
+    "PASATIEMPOS": [], 
+    "AUTOMOTRIZ": [], 
+    "INSTRUMENTOS MUSICALES": [], 
+    "ALIMENTOS Y BEBIDAS": [], 
+    "OTROS NEGOCIOS": []
+    # ... añade todas las demás categorías y sus palabras clave aquí
+}
+
+def assign_category(product_name):
+    for category, keywords in category_keywords.items():
+        for keyword in keywords:
+            if keyword.lower() in product_name.lower():  # Comprueba si la palabra clave está en el nombre del producto
+                return category
+    return "OTROS NEGOCIOS"  # Si no se encuentra ninguna coincidencia, asigna la categoría "OTROS NEGOCIOS"
+
 
 async def get_elements(soup):
     # Buscar clases que comienzan con "jsx"
@@ -99,6 +165,9 @@ async def get_elements(soup):
    
 
 def clean_price(price_str):
+
+    logging.info(f"Original price_str: {price_str}")
+
     # Limpiamos la cadena eliminando caracteres no deseados, excepto el punto y dígitos
     cleaned_price = re.sub(r"[^\d\.]", "", price_str.strip())
     
@@ -122,81 +191,89 @@ async def get_offers():
     new_products = []  # Lista para guardar los nuevos productos encontrados
 
     async with aiohttp.ClientSession() as session:
-        for page in range(1, 2):
+        for page in range(1, 5):
             url = f"{url_base}?page={page}"
-            
             
             try:
                 async with session.get(url) as response:
                     response.raise_for_status()  # Esto generará un error si el código de estado no es 200
-                    html = await fetch(url, session)
+                    html = await response.text()
                     soup = BeautifulSoup(html, "html.parser")
                     all_elements = await get_elements(soup)
 
                 async with aiosqlite.connect('productos.db') as conn:
                     cursor = await conn.cursor()
                      
-
                     for element in all_elements:
                         product_name = element.find("b", class_="jsx-1833870204 copy2 primary jsx-2889528833 normal pod-subTitle subTitle-rebrand")
-                        # Definimos las clases que deseamos buscar
-                        classes_to_search = [
-                        "copy10 primary high jsx-2889528833 normal line-height-22",
-                        "copy10 primary medium jsx-2889528833 normal line-height-22"
-                        ]
-
+                        # Definimos las clases que deseamos busca
+                        classes_to_search = ["copy10 primary high jsx-2889528833 normal line-height-22","copy10 primary medium jsx-2889528833 normal line-height-22"]
                         # Buscamos el elemento que tenga alguna de las clases definidas
                         offer = find_element_by_classes(element, None, classes_to_search)
-
                         discount_badge = element.find("div", class_="jsx-2575670149 discount-badge")
-            
                         # Definimos las clases que deseamos buscar para el precio anterior
-                        classes_to_search_price = [
-                        "copy3 septenary medium jsx-2889528833 normal crossed line-height-17",
-                        "copy3 primary medium jsx-2889528833 normal crossed line-height-17"
-                        ]
-
+                        classes_to_search_price = ["copy3 septenary medium jsx-2889528833 normal crossed line-height-17","copy3 primary medium jsx-2889528833 normal crossed line-height-17", "copy10 primary medium jsx-2889528833 normal line-height-22"]
                         previous_price_element = find_element_by_classes(element, "span", classes_to_search_price)
-                        previous_price = clean_price(previous_price_element.text.strip()) if previous_price_element else None
-
-                        # Extraer el porcentaje de descuento
-                        discount_percentage = discount_badge.text.strip() if discount_badge else "N/A"
-
+                        
                         product_in_db = None
                         product_name_text = None
                         current_offer = None
 
+                        # Extraer el porcentaje de descuento
+                        discount_percentage = discount_badge.text.strip() if discount_badge else "N/A"
+                       
                         if product_name and offer and discount_badge:
-                           div_element = element.find("div", class_="jsx-1833870204 jsx-3831830274 pod pod-4_GRID")
-                           data_category = div_element["data-category"] if div_element and "data-category" in div_element.attrs else None
+                            div_element = element.find("div", class_="jsx-1833870204 jsx-3831830274 pod pod-4_GRID")
+                            data_category = div_element["data-category"] if div_element and "data-category" in div_element.attrs else None
 
-                           link_element = element.find("a", class_="jsx-2907167179 layout_grid-view layout_view_4_GRID")
-                           link = link_element["href"] if link_element else None
+                            link_element = element.find("a", class_="jsx-2907167179 layout_grid-view layout_view_4_GRID")
+                            link = link_element["href"] if link_element else None
+                            logging.info(f"Enlace para {product_name_text}: {link}")
 
-                           product_name_text = product_name.text.strip().split("$")[0].strip()
-                           current_offer = clean_price(offer.text.strip())
+                            product_name_text = product_name.text.strip().split("$")[0].strip()
+                            logging.info(f"Descuento para {product_name_text}: {discount_percentage}")
 
-                           await cursor.execute("SELECT * FROM productos WHERE nombre = ?", (product_name_text,))
-                           product_in_db = await cursor.fetchone()
+                            if previous_price_element:
+                            # Usa una expresión regular para extraer el precio
+                                match = re.search(r"\$\s*([\d\.]+)", previous_price_element.text.strip())
+                                if match:
+                                    raw_previous_price = match.group(1)
+                                    logging.info(f"Precio anterior sin limpiar para {product_name_text}: {raw_previous_price}")
+                                    previous_price = clean_price(raw_previous_price)
+                                    logging.info(f"Precio anterior limpio para {product_name_text}: {previous_price}")
+                                else:
+                                    previous_price = None
 
-                           logging.info(f"Producto detectado: {product_name_text}, Oferta: {current_offer}, Precio anterior: {previous_price}, Descuento: {discount_percentage}, Categoría: {data_category}, Enlace: {link}")
-                           last_price = clean_price(product_in_db[3]) if product_in_db and product_in_db[3] else None
+                            logging.info(f"Procesando producto: {product_name_text}")
+                            current_offer = clean_price(offer.text.strip())
+                            logging.info(f"Oferta actual para {product_name_text}: {current_offer}")
 
-                           sleep_time = random.uniform(3, 7)  # Pausa durante un tiempo aleatorio entre 3 y 7 segundos
-                           await asyncio.sleep(sleep_time)
+                            if product_name_text:
+                                category = assign_category(product_name_text)
+                            else:
+                                category = "OTROS NEGOCIOS"  # o cualquier valor por defecto
 
-                        if not product_in_db and product_name_text and product_name_text != "None":
-                                try:
-                                    await cursor.execute("INSERT INTO productos VALUES (?, ?, ?, ?, ?, ?)", (product_name_text, current_offer, previous_price, discount_percentage, data_category, link))
-                                    await conn.commit()
-                                    logging.info(f"Producto {product_name_text} agregado a la base de datos.")
-                                    new_products.append((product_name_text, current_offer, previous_price, discount_percentage, data_category, link))
-                                except sqlite3.Error as e:
-                                    logging.error(f"Error al agregar el producto {product_name_text} a la base de datos: {e}")
-                                except Exception as e:  # Captura cualquier otra excepción
-                                    logging.error(f"Error inesperado al agregar el producto {product_name_text} a la base de datos: {e}")
-                        else:
-                            logging.error(f"Producto inválido detectado o ya existe en la base de datos: {product_name_text}")
+                            if product_name_text:
+                                await cursor.execute("SELECT * FROM productos WHERE nombre = ?", (product_name_text,))
+                                product_in_db = await cursor.fetchone()
+
+                                if not product_in_db:
+                                
+                                    try:
+                                        await cursor.execute("INSERT OR IGNORE INTO productos VALUES (?, ?, ?, ?, ?, ?, ?)", (product_name_text, current_offer, previous_price, link, data_category, category, discount_percentage))
+                                        await conn.commit()
+                                        logging.info(f"Producto {product_name_text} agregado a la base de datos.")
+                                        new_products.append((product_name_text, current_offer, previous_price, link, data_category, category, discount_percentage))
+                                    except sqlite3.Error as e:
+                                        logging.error(f"Error al agregar el producto '{product_name_text}' a la base de datos: {e}. Enlace: {link}")
+                                    except Exception as e:
+                                        logging.error(f"Error inesperado al agregar el producto '{product_name_text}' a la base de datos: {e}. Enlace: {link}")
+                                else:
+                                    logging.error(f"El producto '{product_name_text}' ya existe en la base de datos. Enlace: {link}")
+                                    logging.info(f"Producto {product_name_text} procesado.")
+                            else:    
+                                logging.error(f"Producto inválido detectado. Enlace: {link}")
+
 
             except aiohttp.ClientResponseError as e:
                 logging.error(f"Error {e.status}. Pausando durante 60 segundos antes de reintentar.")
@@ -221,7 +298,7 @@ async def enviar_mensajes_telegram(update, context, product_offers_links):
         chunks = [product_offers_links[i:i + n] for i in range(0, len(product_offers_links), n)]
         
         for chunk in chunks:
-            for product, offer, previous_price, discount_percentage, data_category, link in chunk:
+            for product, offer, previous_price, link, data_category, category, discount_percentage  in chunk:
                 # Enviamos el nombre del producto, la oferta, el porcentaje de descuento, el precio anterior y el enlace al chat del usuario
                 message = f"Producto: {product}\nOferta actual: {offer}\nDescuento: {discount_percentage}\nPrecio anterior: {previous_price}\nEnlace: {link}"
                 try:
@@ -240,22 +317,19 @@ async def enviar_mensajes_telegram(update, context, product_offers_links):
 
 async def asincrono_buscar_ofertas(update, context):
     chat_id = update.effective_chat.id
-    context.bot.send_message(chat_id, "Buscando ofertas, por favor espera...")
+    context.bot.send_message(chat_id, "Buscando ofertas y actualizando la base de datos, por favor espera...")
 
     # Espera a que se complete get_offers antes de continuar
-    product_offers_links = await get_offers()
+    await get_offers()  # No necesitamos el resultado directamente, solo queremos que se actualice la base de datos
 
-    # Ahora puedes usar product_offers_links como una lista regular,
-    # porque get_offers ha completado su ejecución y ha devuelto su resultado.
-    await enviar_mensajes_telegram(update, context, product_offers_links)
-    
-    # Ahora, mostramos las categorías al usuario
+    # Informar al usuario que la actualización ha terminado
+    context.bot.send_message(chat_id, "Base de datos actualizada con las últimas ofertas.")
+
+     # Mostrar las categorías al usuario
     categories = get_unique_categories()
     keyboard = build_category_keyboard(categories)
     context.bot.send_message(chat_id, "Por favor, selecciona una categoría:", reply_markup=keyboard)
-
-    # Después de esto, el bot no inicia automáticamente una nueva búsqueda,
-    # sino que espera a que el usuario seleccione una categoría o envíe un nuevo comando.
+    
 
 def buscar_ofertas(update, context):
     # Crea un nuevo bucle de eventos
@@ -273,17 +347,25 @@ def category_callback(update, context):
     query = update.callback_query
     category_selected = query.data
     products = get_products_by_category(category_selected)
+    
 
     messages = []
     for product in products:
-        product_name, offer, previous_price, discount_percentage, data_category, link = product
+        product_name, offer, previous_price, discount_percentage, data_category, category, link = product
         message = f"Producto: {product_name}\nOferta actual: {offer}\nDescuento: {discount_percentage}\nPrecio anterior: {previous_price}\nEnlace: {link}"
         messages.append(message)
 
     # Enviar todos los productos en un solo mensaje (puedes dividirlos si es necesario)
-    context.bot.send_message(chat_id, "\n\n".join(messages))
+    send_offer_messages(context.bot, update.effective_chat.id, messages)
 
     query.answer()
+
+    
+
+def send_offer_messages(bot, chat_id, messages, delay=0.5):
+    for message in messages:
+        bot.send_message(chat_id, message)
+        time.sleep(delay)
 
 def main():
     updater = Updater(token, use_context=True)
@@ -310,8 +392,12 @@ def main():
 
 if __name__ == "__main__":
     # Llama a estas funciones al inicio de tu script para asegurarte de que la tabla exista
+   
     create_table()
+    add_data_category_column()
+    add_category_column()
     add_discount_percentage_column()
+    main()
     #loop = asyncio.get_event_loop()
     #new_products = loop.run_until_complete(get_offers())
-    main()
+   
