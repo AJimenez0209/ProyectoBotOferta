@@ -396,6 +396,12 @@ def send_offer_messages(bot, chat_id, messages, delay=0.5):
         bot.send_message(chat_id, message)
         time.sleep(delay)
 
+def periodic_task(context):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(get_offers())
+
+
 def main():
     updater = Updater(token, use_context=True)
 
@@ -403,6 +409,10 @@ def main():
     
     dp.add_handler(CallbackQueryHandler(category_callback))
     dp.add_handler(CommandHandler('buscar_ofertas', buscar_ofertas))
+
+    # Agrega la tarea periódica
+    job_queue = updater.job_queue
+    job_queue.run_repeating(periodic_task, interval=600)  # 600 segundos = 10 minutos
 
     max_retries = 3
     for i in range(max_retries):
@@ -421,7 +431,6 @@ def main():
 
 if __name__ == "__main__":
     # Llama a estas funciones al inicio de tu script para asegurarte de que la tabla exista
-   
     create_table()
     add_data_category_column()
     add_category_column()
